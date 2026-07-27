@@ -40,12 +40,9 @@ function App() {
   // Notes
   // ==========================
   const [notes, setNotes] = useState([]);
-
-  // IMPORTANT
   const [selectedNoteId, setSelectedNoteId] = useState(null);
 
-  const selectedNote =
-    notes.find((note) => note.id === selectedNoteId) || null;
+  const selectedNote = notes.find((note) => note.id === selectedNoteId) || null;
 
   // ==========================
   // Firestore Realtime
@@ -72,11 +69,10 @@ function App() {
         return;
       }
 
+      // Keep the current note selected, or select the first one if not found
       setSelectedNoteId((prev) => {
         const exists = firebaseNotes.find((n) => n.id === prev);
-
         if (exists) return prev;
-
         return firebaseNotes[0].id;
       });
     });
@@ -98,18 +94,13 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem("theme", theme);
-
-    document.documentElement.classList.toggle(
-      "dark",
-      theme === "dark"
-    );
+    document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
   // ==========================
   // Settings
   // ==========================
   const [showSettings, setShowSettings] = useState(false);
-
   const [saveStatus] = useState("✅ Saved");
 
   // ==========================
@@ -117,7 +108,7 @@ function App() {
   // ==========================
   if (loading) {
     return (
-      <h1 className="text-center mt-20 text-xl">
+      <h1 className="text-center mt-20 text-xl text-slate-300">
         Loading...
       </h1>
     );
@@ -131,7 +122,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
         <div className="w-96 space-y-6">
           <Signup />
-          <hr />
+          <hr className="border-slate-700" />
           <Login />
         </div>
       </div>
@@ -144,25 +135,21 @@ function App() {
   return (
     <div
       className={`flex h-screen ${
-        theme === "dark"
-          ? "bg-slate-900 text-white"
-          : "bg-gray-100 text-black"
+        theme === "dark" ? "bg-slate-900 text-white" : "bg-gray-100 text-black"
       }`}
     >
       <Sidebar
         notes={notes}
         setNotes={setNotes}
         selectedNote={selectedNote}
-        setSelectedNote={(note) =>
-          setSelectedNoteId(note?.id || null)
-        }
+        setSelectedNote={(note) => setSelectedNoteId(note?.id || null)}
         searchTerm={searchTerm}
       />
 
       <div className="flex flex-col flex-1">
         <button
           onClick={() => signOut(auth)}
-          className="bg-red-500 text-white px-4 py-2 rounded m-2 w-fit"
+          className="bg-red-500 hover:bg-red-600 transition-colors text-white px-4 py-2 rounded m-2 w-fit"
         >
           Logout
         </button>
@@ -182,14 +169,10 @@ function App() {
             notes={notes}
             setNotes={setNotes}
             selectedNote={selectedNote}
-            setSelectedNote={(note) =>
-              setSelectedNoteId(note?.id || null)
-            }
+            setSelectedNote={(note) => setSelectedNoteId(note?.id || null)}
           />
 
-          <AIPanel
-            selectedNote={selectedNote}
-          />
+          <AIPanel selectedNote={selectedNote} />
         </div>
       </div>
 

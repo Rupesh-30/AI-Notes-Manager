@@ -9,60 +9,40 @@ import {
   updateDoc
 } from "firebase/firestore";
 
-import { db } from "../firebase/config";            
+import { db } from "../firebase/config";
 
 // Update Note
 export const updateNote = async (id, data) => {
-  console.log("Updating Doc ID:", id);
-  console.log("Data:", data);
-
   await updateDoc(doc(db, "notes", id), data);
-
-  console.log("Firestore Updated Successfully");
 };
+
 // Add Note
 export const addNote = async (note, uid) => {
-
-  const docRef = await addDoc(
-    collection(db, "notes"),
-    {
-      ...note,
-      uid: uid,
-      createdAt: new Date()
-    }
-  );
+  const docRef = await addDoc(collection(db, "notes"), {
+    ...note,
+    uid: uid,
+    createdAt: Date.now(), // Number format for perfect sorting
+  });
 
   return docRef.id;
 };
 
-
-
 // Get User Notes
 export const getNotes = async (uid) => {
-
   const q = query(
     collection(db, "notes"),
     where("uid", "==", uid)
   );
 
-
   const snapshot = await getDocs(q);
-
 
   return snapshot.docs.map((doc) => ({
     id: doc.id,
     ...doc.data()
   }));
-
 };
-
-
 
 // Delete Note
 export const deleteNote = async (id) => {
-
-  await deleteDoc(
-    doc(db, "notes", id)
-  );
-
+  await deleteDoc(doc(db, "notes", id));
 };

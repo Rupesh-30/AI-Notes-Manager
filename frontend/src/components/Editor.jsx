@@ -1,13 +1,50 @@
+import { useEffect, useState } from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import { updateNote } from "../services/notesService";
 
-function Editor({
-  notes,
-  setNotes,
-  selectedNote,
-  setSelectedNote,
-}) {
+function Editor({ notes, setNotes, selectedNote, setSelectedNote }) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+
+  // ১. সাইডবার থেকে নোট সিলেক্ট করলে Local State আপডেট হবে
+  useEffect(() => {
+    if (selectedNote) {
+      setTitle(selectedNote.title || "");
+      setContent(selectedNote.content || "");
+    }
+  }, [selectedNote?.id]);
+
+  // ২. Debounced Auto Save (টাইপিং থামানোর ১ সেকেন্ড পর সেভ হবে)
+  useEffect(() => {
+    if (!selectedNote) return;
+
+    if (title === selectedNote.title && content === selectedNote.content) return;
+
+    const timer = setTimeout(async () => {
+      const updatedAt = new Date().toLocaleString();
+
+      try {
+        await updateNote(selectedNote.id, {
+          title,
+          content,
+          updatedAt,
+        });
+
+        await updateNote(selectedNote.id, {
+  title,
+  content,
+  updatedAt,
+});
+      } catch (error) {
+        console.error("Error saving note:", error);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [title, content, selectedNote]);
+
+  // ৩. কোনো নোট সিলেক্ট করা না থাকলে এই UI দেখাবে
   if (!selectedNote) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-900">
@@ -15,7 +52,6 @@ function Editor({
           <h2 className="text-3xl font-bold text-slate-300">
             📝 No Note Selected
           </h2>
-
           <p className="text-slate-500 mt-2">
             Select a note from the sidebar or create a new one.
           </p>
@@ -24,101 +60,23 @@ function Editor({
     );
   }
 
-  // ==========================
-  // Update Title
-  // ==========================
-  async function updateTitle(e) {
-    const title = e.target.value;
-    const updatedAt = new Date().toLocaleString();
-
-    setSelectedNote((prev) => ({
-      ...prev,
-      title,
-      updatedAt,
-    }));
-
-    setNotes((prev) =>
-      prev.map((note) =>
-        note.id === selectedNote.id
-          ? {
-              ...note,
-              title,
-              updatedAt,
-            }
-          : note
-      )
-    );
-
-    try {
-      await updateNote(selectedNote.id, {
-        title,
-        updatedAt,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  // ==========================
-  // Update Content
-  // ==========================
-  async function updateContent(value) {
-    const updatedAt = new Date().toLocaleString();
-
-    setSelectedNote((prev) => ({
-      ...prev,
-      content: value,
-      updatedAt,
-    }));
-
-    setNotes((prev) =>
-      prev.map((note) =>
-        note.id === selectedNote.id
-          ? {
-              ...note,
-              content: value,
-              updatedAt,
-            }
-          : note
-      )
-    );
-
-    try {
-      await updateNote(selectedNote.id, {
-        content: value,
-        updatedAt,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  // ==========================
-  // Statistics
-  // ==========================
-  const plainText = (selectedNote.content || "")
+  // ৪. Statistics Calculation (লাইভ কাউন্ট)
+  const plainText = (content || "")
     .replace(/<[^>]*>/g, "")
     .replace(/&nbsp;/g, " ")
     .trim();
 
-  const wordCount = plainText
-    ? plainText.split(/\s+/).length
-    : 0;
-
+  const wordCount = plainText ? plainText.split(/\s+/).length : 0;
   const charCount = plainText.length;
-
-  const readingTime = Math.max(
-    1,
-    Math.ceil(wordCount / 200)
-  );
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
   return (
     <div className="flex-1 bg-slate-900 p-8 overflow-hidden">
       <div className="h-full bg-slate-800 rounded-2xl shadow-xl border border-slate-700 p-6 flex flex-col">
-
+        
         <input
-          value={selectedNote.title}
-          onChange={updateTitle}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           placeholder="Untitled Note"
           className="bg-transparent text-4xl font-bold text-white outline-none border-b border-slate-700 pb-4"
         />
@@ -128,11 +86,10 @@ function Editor({
         </div>
 
         <ReactQuill
-          key={selectedNote.id}
           theme="snow"
-          value={selectedNote.content || ""}
-          onChange={updateContent}
-          className="flex-1 bg-white text-black rounded-xl"
+          value={content}
+          onChange={setContent}
+          className="flex-1 bg-white text-black rounded-xl overflow-hidden"
         />
 
         <div className="mt-4 flex justify-between text-sm text-slate-400 border-t border-slate-700 pt-3">
