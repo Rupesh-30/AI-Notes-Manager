@@ -1,3 +1,6 @@
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase/config";
+import toast from "react-hot-toast";
 import { exportPDF } from "../services/pdf";
 
 function Navbar({
@@ -33,7 +36,7 @@ function Navbar({
             {saveStatus}
           </div>
 
-          {/* Theme Toggle Button (Added since props were available) */}
+          {/* Theme Toggle Button */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="bg-slate-700 hover:bg-slate-600 p-2.5 rounded-lg text-white transition-colors"
@@ -46,7 +49,7 @@ function Navbar({
           <button
             onClick={() => {
               if (!selectedNote) {
-                alert("Please select a note to export.");
+                toast.error("Please select a note to export.");
                 return;
               }
               exportPDF(selectedNote);
@@ -62,6 +65,22 @@ function Navbar({
             className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-white transition-colors flex items-center gap-2"
           >
             ⚙️ Settings
+          </button>
+
+          {/* 🚪 Logout Button */}
+          <button
+            onClick={async () => {
+              try {
+                await signOut(auth);
+                toast.success("Logged out successfully!");
+              } catch (error) {
+                console.error("Logout Error:", error);
+                toast.error("Logout failed. Please try again.");
+              }
+            }}
+            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+          >
+            🚪 Logout
           </button>
 
         </div>
