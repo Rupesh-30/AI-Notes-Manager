@@ -20,7 +20,8 @@ export const updateNote = async (id, data) => {
 export const addNote = async (note, uid) => {
   const docRef = await addDoc(collection(db, "notes"), {
     ...note,
-    uid: uid,
+    tags: note.tags || [], // ✅ Default empty tags added
+    uid,
     createdAt: Date.now(), // Number format for perfect sorting
   });
 

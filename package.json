@@ -1,7 +1,9 @@
 {
   "dependencies": {
-    "@google/genai": "^2.13.0",
+    "@google/genai": "^2.15.0",
+    "framer-motion": "^12.43.0",
     "jspdf": "^4.2.1",
-    "react-quill": "^2.0.0"
+    "react-hot-toast": "^2.6.0",
+    "react-quill": "^0.0.2"
   }
 }

@@ -11,8 +11,9 @@ function Sidebar({
   selectedNote,
   setSelectedNote,
   searchTerm,
-}) {
-  // ==========================
+  selectedTag,
+  setSelectedTag,
+}) {  // ==========================
   // Remove HTML Tags
   // ==========================
   function stripHtml(html) {
@@ -23,40 +24,34 @@ function Sidebar({
   }
 
   // ==========================
-  // Add Note
+  // Add Note (Simplified & Safe)
   // ==========================
   async function addNote() {
     const user = auth.currentUser;
     if (!user) return;
 
     const newNote = {
+      folder: "General",
       title: "New Note",
       content: "",
       pinned: false,
       favorite: false,
       deleted: false,
       updatedAt: new Date().toLocaleString(),
-      createdAt: Date.now(), // Added for better sorting in future
+      createdAt: Date.now(),
+      uid: user.uid, // UID এখানে রাখা ভালো, ডেটাবেসে ফিল্টারিংয়ের জন্য
     };
 
     try {
-      const id = await addFirestoreNote(newNote, user.uid);
-      
-      const savedNote = { id, ...newNote, uid: user.uid };
-      
-      // Optimistic UI Update: 
-      // onSnapshot আসার আগেই লোকাল স্টেটে নোটটা দিয়ে দিচ্ছি, যাতে Editor-এ delay না হয়!
-      setNotes([savedNote, ...notes]);
-
-      // 이제 Editor সাথে সাথে নতুন নোটটা পেয়ে যাবে
-      setSelectedNote({ id });
+      // শুধু ফায়ারবেসে সেভ হবে, onSnapshot অটোমেটিক লিস্ট আপডেট করে দেবে
+      await addFirestoreNote(newNote, user.uid);
     } catch (error) {
       console.error("Add Note Error:", error);
     }
   }
 
   // ==========================
-  // Move to Trash
+  // Move to Trash (Pessimistic - Firebase confirmed then UI)
   // ==========================
   async function deleteNote(id) {
     try {
@@ -93,16 +88,16 @@ function Sidebar({
   // ==========================
   async function emptyTrash() {
     try {
-      for (const note of trashNotes) {
-        await deleteFirestoreNote(note.id);
-      }
+      await Promise.all(
+        trashNotes.map((note) => deleteFirestoreNote(note.id))
+      );
     } catch (error) {
       console.error("Empty Trash Error:", error);
     }
   }
 
   // ==========================
-  // Pin
+  // Pin & Favorite
   // ==========================
   async function togglePin(note) {
     try {
@@ -112,9 +107,6 @@ function Sidebar({
     }
   }
 
-  // ==========================
-  // Favorite
-  // ==========================
   async function toggleFavorite(note) {
     try {
       await updateNote(note.id, { favorite: !note.favorite });
@@ -127,20 +119,20 @@ function Sidebar({
   // Active Notes (Filtered & Sorted)
   // ==========================
   const sortedNotes = [...notes]
-    .filter(
-      (note) =>
-        !note.deleted &&
-        (note.title || "")
-          .toLowerCase()
-          .includes((searchTerm || "").toLowerCase())
-    )
+  .filter(
+    (note) =>
+      !note.deleted &&
+      (selectedTag === "" || note.folder === selectedTag) &&
+      (note.title || "")
+        .toLowerCase()
+        .includes((searchTerm || "").toLowerCase())
+  )
     .sort((a, b) => {
       if (a.pinned !== b.pinned) return b.pinned - a.pinned;
       if (a.favorite !== b.favorite) return b.favorite - a.favorite;
-      return b.createdAt - a.createdAt; // Default sorting by newest
+      return b.createdAt - a.createdAt;
     });
 
-  // Trash Notes
   const trashNotes = notes.filter((note) => note.deleted);
 
   return (
@@ -157,9 +149,7 @@ function Sidebar({
       {/* Active Notes */}
       <div className="mt-6 space-y-3 flex-1 overflow-y-auto pr-1">
         {sortedNotes.length === 0 ? (
-          <p className="text-slate-400 text-sm text-center mt-10">
-            No notes found.
-          </p>
+          <p className="text-slate-400 text-sm text-center mt-10">No notes found.</p>
         ) : (
           sortedNotes.map((note) => (
             <div
@@ -173,59 +163,18 @@ function Sidebar({
             >
               <div className="flex-1 overflow-hidden">
                 <div className="font-medium truncate text-sm">
-                  {note.pinned && "📌 "}
-                  {note.favorite && "⭐ "}
+                  {note.pinned && "📌 "} {note.favorite && "⭐ "}
                   {note.title || "Untitled Note"}
                 </div>
-
-                <div
-                  className={`text-xs truncate mt-1 ${
-                    selectedNote?.id === note.id
-                      ? "text-cyan-100"
-                      : "text-slate-400"
-                  }`}
-                >
-                  {note.content
-                    ? stripHtml(note.content).slice(0, 35) +
-                      (stripHtml(note.content).length > 35 ? "..." : "")
-                    : "Empty Note"}
+                <div className="text-xs truncate mt-1 text-slate-400">
+                  {note.content ? stripHtml(note.content).slice(0, 35) + "..." : "Empty Note"}
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-2 ml-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePin(note);
-                  }}
-                  title={note.pinned ? "Unpin" : "Pin"}
-                  className="hover:scale-110 transition-transform"
-                >
-                  {note.pinned ? "📌" : "📍"}
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFavorite(note);
-                  }}
-                  title={note.favorite ? "Unfavorite" : "Favorite"}
-                  className="hover:scale-110 transition-transform"
-                >
-                  {note.favorite ? "⭐" : "☆"}
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNote(note.id);
-                  }}
-                  className="hover:scale-110 transition-transform text-red-400 hover:text-red-300"
-                  title="Move to Trash"
-                >
-                  🗑️
-                </button>
+                <button onClick={(e) => { e.stopPropagation(); togglePin(note); }}>{note.pinned ? "📌" : "📍"}</button>
+                <button onClick={(e) => { e.stopPropagation(); toggleFavorite(note); }}>{note.favorite ? "⭐" : "☆"}</button>
+                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="text-red-400">🗑️</button>
               </div>
             </div>
           ))
@@ -233,54 +182,25 @@ function Sidebar({
       </div>
 
       <hr className="my-6 border-slate-600" />
-
+      
       {/* Trash Section */}
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-bold text-red-400">
-          🗑 Trash ({trashNotes.length})
-        </h2>
-
+        <h2 className="text-lg font-bold text-red-400">🗑 Trash ({trashNotes.length})</h2>
         {trashNotes.length > 0 && (
-          <button
-            onClick={emptyTrash}
-            className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors px-3 py-1.5 rounded-md font-medium"
-          >
-            Empty
-          </button>
+          <button onClick={emptyTrash} className="text-xs bg-red-500/20 text-red-400 px-3 py-1 rounded">Empty</button>
         )}
       </div>
 
       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-        {trashNotes.length === 0 ? (
-          <p className="text-slate-500 text-sm">Trash is empty.</p>
-        ) : (
-          trashNotes.map((note) => (
-            <div
-              key={note.id}
-              className="bg-slate-700/50 border border-slate-600 rounded-lg p-3"
-            >
-              <div className="font-medium truncate text-slate-300 text-sm">
-                {note.title || "Untitled Note"}
-              </div>
-
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => restoreNote(note.id)}
-                  className="flex-1 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-colors rounded py-1.5 text-xs font-medium"
-                >
-                  ♻ Restore
-                </button>
-
-                <button
-                  onClick={() => deleteForever(note.id)}
-                  className="flex-1 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-colors rounded py-1.5 text-xs font-medium"
-                >
-                  ❌ Delete
-                </button>
-              </div>
+        {trashNotes.map((note) => (
+          <div key={note.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-3">
+            <div className="text-sm truncate text-slate-300">{note.title}</div>
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => restoreNote(note.id)} className="text-xs text-green-400">♻ Restore</button>
+              <button onClick={() => deleteForever(note.id)} className="text-xs text-red-400">❌ Delete</button>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
     </aside>
   );
