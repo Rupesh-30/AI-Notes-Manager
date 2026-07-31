@@ -1,97 +1,38 @@
-import { GoogleGenAI } from "@google/genai";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebase/config";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY,
-});
+// Firebase Cloud Function এর রেফারেন্স
+const generateAI = httpsCallable(functions, "generateAIContent");
 
-
-async function callGemini(prompt) {
+// হেল্পার ফাংশন
+async function callAIFunction(actionName, note, question = "") {
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
+    const result = await generateAI({
+      action: actionName,
+      note: note,
+      question: question,
     });
 
-    return response.text;
-
+    return result.data.text;
   } catch (error) {
-    console.error("AI Error:", error);
+    console.error(`AI ${actionName} Error:`, error);
+
+    if (error.code === "functions/resource-exhausted") {
+      return "⚠️ Request limit reached. Please wait a few seconds and try again.";
+    }
+
+    if (error.code === "functions/unauthenticated") {
+      return "❌ Please login to use AI features.";
+    }
 
     return "❌ Failed to get AI response.";
   }
 }
 
-
-// Summarize
-export async function summarizeNote(note) {
-  return callGemini(`
-Summarize the following note in simple English.
-
-${note}
-`);
-}
-
-
-// Grammar
-export async function improveGrammar(note) {
-  return callGemini(`
-Correct the grammar of this text.
-Do not change the meaning.
-Return only corrected text.
-
-${note}
-`);
-}
-
-
-// Generate Tasks
-export async function generateTasks(note) {
-  return callGemini(`
-Convert this note into actionable tasks.
-
-Rules:
-- Return ONLY markdown checklist.
-- Every task starts with "- [ ]"
-- One task per line.
-
-Note:
-${note}
-`);
-}
-
-
-// Translate
-export async function translateNote(note) {
-  return callGemini(`
-Translate this text into Bengali.
-Keep the meaning.
-
-${note}
-`);
-}
-
-
-// Rewrite
-export async function rewriteNote(note) {
-  return callGemini(`
-Rewrite this note professionally.
-Improve clarity.
-Do not add new information.
-
-${note}
-`);
-}
-
-
-// Ask AI
-export async function askAI(question, note) {
-  return callGemini(`
-Current Note:
-${note}
-
-User Question:
-${question}
-
-Answer shortly and clearly.
-`);
-}
+// Exported Functions
+export const summarizeNote = (note) => callAIFunction("Summarize", note);
+export const improveGrammar = (note) => callAIFunction("Grammar", note);
+export const generateTasks = (note) => callAIFunction("Tasks", note);
+export const translateNote = (note) => callAIFunction("Translate", note);
+export const rewriteNote = (note) => callAIFunction("Rewrite", note);
+export const askAI = (question, note) => callAIFunction("Ask AI", note, question);
