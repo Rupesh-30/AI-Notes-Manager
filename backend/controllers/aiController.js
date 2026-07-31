@@ -13,16 +13,20 @@ async function askAI(req, res) {
 
     const text = await generateAI(prompt);
 
-    res.json({
+    return res.status(200).json({
       success: true,
       text,
     });
-  } catch (error) {
-    console.error("AI Error:", error);
 
-    res.status(500).json({
+  } catch (error) {
+    console.error("========== AI ERROR ==========");
+    console.error(error);
+    console.error("==============================");
+
+    return res.status(500).json({
       success: false,
-      message: "Internal Server Error",
+      message: error.message || "Internal Server Error",
+      error: String(error),
     });
   }
 }
