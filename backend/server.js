@@ -7,71 +7,60 @@ const aiRoutes = require("./routes/aiRoutes");
 
 const app = express();
 
-// Allowed Frontend Origins
+// Allow these origins
 const allowedOrigins = [
   "http://localhost:5173",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+  "https://ai-notes-manager-jade.vercel.app",
+];
 
-// CORS
+// Add FRONTEND_URL if it exists
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
 app.use(
   cors({
-    origin: function (origin, callback) {
+    origin(origin, callback) {
       console.log("Origin:", origin);
-      console.log("Allowed Origins:", allowedOrigins);
 
-      // Allow Postman, curl, server-to-server requests
-      if (!origin) {
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS blocked: ${origin}`));
+      console.log("Blocked:", origin);
+      callback(new Error(`CORS blocked: ${origin}`));
     },
-    credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
-// Parse JSON
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json());
 
-// Health Check
 app.get("/", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
     message: "🚀 AI Notes Manager Backend Running",
   });
 });
 
-// AI Routes
 app.use("/api/ai", aiRoutes);
 
-// 404
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
-});
-
-// Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("Server Error:", err);
+  console.error(err);
 
   res.status(500).json({
     success: false,
-    message: err.message || "Internal Server Error",
+    message: err.message,
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend running on port ${PORT}`);
+  console.log("Server running on", PORT);
   console.log("Allowed Origins:", allowedOrigins);
 });
