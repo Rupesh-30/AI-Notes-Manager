@@ -1,14 +1,10 @@
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
+import { trackAIUsage } from "../services/usageService";
+import { auth } from "../firebase/config";
 
-import {
-  summarizeNote,
-  improveGrammar,
-  generateTasks,
-  translateNote,
-  rewriteNote,
-  askAI,
-} from "../services/gemini";
+// ⭐ Updated: Backend AI Service Integration
+import { askBackendAI } from "../services/aiService";
 
 // Helper function to remove HTML tags and format text nicely
 function cleanAIResponse(text) {
@@ -71,6 +67,15 @@ function AIPanel({ selectedNote }) {
       setResponse(cleanResult);
       setCooldown(10);
 
+      // ⭐ Usage tracking with isolated error handling
+      try {
+        if (auth.currentUser) {
+          await trackAIUsage(auth.currentUser.uid, actionName);
+        }
+      } catch (usageError) {
+        console.error("Usage tracking failed:", usageError);
+      }
+
       setHistory((prev) => {
         const newItem = {
           id: Date.now(),
@@ -92,18 +97,42 @@ function AIPanel({ selectedNote }) {
     }
   };
 
-  const handleSummarize = () => runAI("Summarize", () => summarizeNote(getCleanContent()));
-  const handleGrammar = () => runAI("Grammar", () => improveGrammar(getCleanContent()));
-  const handleTasks = () => runAI("Tasks", () => generateTasks(getCleanContent()));
-  const handleTranslate = () => runAI("Translate", () => translateNote(getCleanContent()));
-  const handleRewrite = () => runAI("Rewrite", () => rewriteNote(getCleanContent()));
+  const handleSummarize = () =>
+    runAI("Summarize", () =>
+      askBackendAI(`Summarize this note briefly:\n\n${getCleanContent()}`)
+    );
+
+  const handleGrammar = () =>
+    runAI("Grammar", () =>
+      askBackendAI(`Fix grammar mistakes in this text:\n\n${getCleanContent()}`)
+    );
+
+  const handleTasks = () =>
+    runAI("Tasks", () =>
+      askBackendAI(`Create an actionable markdown checklist from this note:\n\n${getCleanContent()}`)
+    );
+
+  const handleTranslate = () =>
+    runAI("Translate", () =>
+      askBackendAI(`Translate this note into Bengali:\n\n${getCleanContent()}`)
+    );
+
+  const handleRewrite = () =>
+    runAI("Rewrite", () =>
+      askBackendAI(`Rewrite this note professionally:\n\n${getCleanContent()}`)
+    );
 
   const handleAskAI = () => {
     if (!question.trim()) {
       toast.error("Please enter a question.");
       return;
     }
-    runAI("Ask AI", () => askAI(question, getCleanContent()));
+
+    runAI("Ask AI", () =>
+      askBackendAI(
+        `Based on this note:\n\n${getCleanContent()}\n\nQuestion: ${question}`
+      )
+    );
     setQuestion("");
   };
 
@@ -261,7 +290,6 @@ function AIPanel({ selectedNote }) {
                   </p>
                 )}
 
-                {/* ⭐ CSS Line-Clamp: কেটে যাওয়া বন্ধ করে সর্বোচ্চ ৩ লাইনে সুন্দরভাবে টেক্সট দেখাবে */}
                 <p
                   className="bg-slate-800 rounded-lg p-2 mt-1.5 text-slate-200 text-xs cursor-pointer hover:bg-slate-900 transition-colors line-clamp-3 break-words"
                   title="Click to view full response"
