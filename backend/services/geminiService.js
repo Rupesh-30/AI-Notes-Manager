@@ -1,7 +1,24 @@
-const { GoogleGenAI } = require("@google/genai");
+const ai = require("../config/gemini");
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+async function generateAI(prompt) {
+  try {
+    console.log("AI REQUEST RECEIVED");
 
-module.exports = ai;
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    console.log("AI RESPONSE SUCCESS");
+
+    return response.text;
+
+  } catch (error) {
+    console.error("GEMINI FULL ERROR:");
+    console.error(error);
+
+    throw error;
+  }
+}
+
+module.exports = { generateAI };
