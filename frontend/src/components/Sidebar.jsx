@@ -1,207 +1,616 @@
-import { auth } from "../firebase/config";
+import { useMemo } from "react";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../firebase/config";
+import toast from "react-hot-toast";
+
 import {
-  addNote as addFirestoreNote,
-  updateNote,
-  deleteNote as deleteFirestoreNote,
+  moveToTrash,
+  restoreNote,
+  deleteNotePermanently,
 } from "../services/notesService";
 
 function Sidebar({
-  notes,
-  setNotes,
+  notes = [],
   selectedNote,
   setSelectedNote,
-  searchTerm,
-  selectedTag,
+  searchTerm = "",
+  selectedFolder = "All",
+  setSelectedFolder,
+  selectedTag = "",
   setSelectedTag,
-}) {  // ==========================
-  // Remove HTML Tags
-  // ==========================
-  function stripHtml(html) {
-    return html
-      .replace(/<[^>]*>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .trim();
-  }
-
-  // ==========================
-  // Add Note (Simplified & Safe)
-  // ==========================
-  async function addNote() {
+}) {
+  // =========================
+  // Create New Note
+  // =========================
+  const handleNewNote = async () => {
     const user = auth.currentUser;
-    if (!user) return;
 
-    const newNote = {
-      folder: "General",
-      title: "New Note",
-      content: "",
-      pinned: false,
-      favorite: false,
-      deleted: false,
-      updatedAt: new Date().toLocaleString(),
-      createdAt: Date.now(),
-      uid: user.uid, // UID এখানে রাখা ভালো, ডেটাবেসে ফিল্টারিংয়ের জন্য
-    };
-
-    try {
-      // শুধু ফায়ারবেসে সেভ হবে, onSnapshot অটোমেটিক লিস্ট আপডেট করে দেবে
-      await addFirestoreNote(newNote, user.uid);
-    } catch (error) {
-      console.error("Add Note Error:", error);
+    if (!user) {
+      toast.error("Please login first.");
+      return;
     }
-  }
 
-  // ==========================
-  // Move to Trash (Pessimistic - Firebase confirmed then UI)
-  // ==========================
-  async function deleteNote(id) {
     try {
-      await updateNote(id, { deleted: true });
+      const newNote = {
+        uid: user.uid,
+        title: "Untitled Note",
+        content: "",
+        folder: "Personal",
+        tags: [],
+        pinned: false,
+        favorite: false,
+        trash: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(
+        collection(db, "notes"),
+        newNote
+      );
+
+      const localNote = {
+        id: docRef.id,
+        ...newNote,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      setSelectedNote(localNote);
+
+      // Return to All Notes after creating
+      setSelectedFolder("All");
+      setSelectedTag("");
+
+      toast.success("New note created!");
     } catch (error) {
-      console.error("Delete Error:", error);
+      console.error("Create Note Error:", error);
+      toast.error("Failed to create note.");
     }
-  }
+  };
 
-  // ==========================
-  // Restore
-  // ==========================
-  async function restoreNote(id) {
+  // =========================
+  // Move Note To Trash
+  // =========================
+  const handleMoveToTrash = async (e, note) => {
+    e.stopPropagation();
+
     try {
-      await updateNote(id, { deleted: false });
+      await moveToTrash(note.id);
+
+      // If deleted note was selected, clear selection
+      if (selectedNote?.id === note.id) {
+        setSelectedNote(null);
+      }
+
+      toast.success("Note moved to Trash");
+    } catch (error) {
+      console.error("Move To Trash Error:", error);
+      toast.error("Failed to move note to Trash.");
+    }
+  };
+
+  // =========================
+  // Restore Note
+  // =========================
+  const handleRestore = async (e, note) => {
+    e.stopPropagation();
+
+    try {
+      await restoreNote(note.id);
+
+      toast.success("Note restored successfully!");
     } catch (error) {
       console.error("Restore Error:", error);
+      toast.error("Failed to restore note.");
     }
-  }
+  };
 
-  // ==========================
-  // Delete Forever
-  // ==========================
-  async function deleteForever(id) {
+  // =========================
+  // Permanent Delete
+  // =========================
+  const handlePermanentDelete = async (e, note) => {
+    e.stopPropagation();
+
+    const confirmed = window.confirm(
+      `Permanently delete "${note.title || "Untitled Note"}"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
     try {
-      await deleteFirestoreNote(id);
+      await deleteNotePermanently(note.id);
+
+      if (selectedNote?.id === note.id) {
+        setSelectedNote(null);
+      }
+
+      toast.success("Note permanently deleted.");
     } catch (error) {
-      console.error("Delete Forever Error:", error);
+      console.error("Permanent Delete Error:", error);
+      toast.error("Failed to permanently delete note.");
     }
-  }
+  };
 
-  // ==========================
-  // Empty Trash
-  // ==========================
-  async function emptyTrash() {
-    try {
-      await Promise.all(
-        trashNotes.map((note) => deleteFirestoreNote(note.id))
+  // =========================
+  // Search + Folder + Tag
+  // =========================
+  const filteredNotes = useMemo(() => {
+    const search = searchTerm.toLowerCase().trim();
+
+    return notes.filter((note) => {
+      const isTrash = note.trash === true;
+
+      // Trash mode
+      if (selectedFolder === "Trash") {
+        if (!isTrash) return false;
+      } else {
+        // Normal folders should NEVER show Trash notes
+        if (isTrash) return false;
+      }
+
+      const title = note.title || "";
+      const content = note.content || "";
+
+      const matchesSearch =
+        !search ||
+        title.toLowerCase().includes(search) ||
+        content
+          .replace(/<[^>]*>/g, "")
+          .toLowerCase()
+          .includes(search);
+
+      const matchesFolder =
+        selectedFolder === "All" ||
+        selectedFolder === "Trash" ||
+        note.folder === selectedFolder;
+
+      const tags = Array.isArray(note.tags)
+        ? note.tags
+        : [];
+
+      const matchesTag =
+        selectedFolder === "Trash"
+          ? true
+          : !selectedTag || tags.includes(selectedTag);
+
+      return (
+        matchesSearch &&
+        matchesFolder &&
+        matchesTag
       );
-    } catch (error) {
-      console.error("Empty Trash Error:", error);
-    }
-  }
-
-  // ==========================
-  // Pin & Favorite
-  // ==========================
-  async function togglePin(note) {
-    try {
-      await updateNote(note.id, { pinned: !note.pinned });
-    } catch (error) {
-      console.error("Pin Update Error:", error);
-    }
-  }
-
-  async function toggleFavorite(note) {
-    try {
-      await updateNote(note.id, { favorite: !note.favorite });
-    } catch (error) {
-      console.error("Favorite Update Error:", error);
-    }
-  }
-
-  // ==========================
-  // Active Notes (Filtered & Sorted)
-  // ==========================
-  const sortedNotes = [...notes]
-  .filter(
-    (note) =>
-      !note.deleted &&
-      (selectedTag === "" || note.folder === selectedTag) &&
-      (note.title || "")
-        .toLowerCase()
-        .includes((searchTerm || "").toLowerCase())
-  )
-    .sort((a, b) => {
-      if (a.pinned !== b.pinned) return b.pinned - a.pinned;
-      if (a.favorite !== b.favorite) return b.favorite - a.favorite;
-      return b.createdAt - a.createdAt;
     });
+  }, [
+    notes,
+    searchTerm,
+    selectedFolder,
+    selectedTag,
+  ]);
 
-  const trashNotes = notes.filter((note) => note.deleted);
+  // =========================
+  // Folders
+  // =========================
+  const folders = [
+    "All",
+    "Personal",
+    "Work",
+    "Study",
+    "Ideas",
+  ];
+
+  // =========================
+  // Unique Tags
+  // =========================
+  const allTags = useMemo(() => {
+    return [
+      ...new Set(
+        notes
+          .filter((note) => note.trash !== true)
+          .flatMap((note) =>
+            Array.isArray(note.tags)
+              ? note.tags
+              : []
+          )
+      ),
+    ];
+  }, [notes]);
+
+  // =========================
+  // Counts
+  // =========================
+  const activeNotesCount = notes.filter(
+    (note) => note.trash !== true
+  ).length;
+
+  const trashCount = notes.filter(
+    (note) => note.trash === true
+  ).length;
 
   return (
-    <aside className="w-72 bg-slate-800 p-5 border-r border-slate-700 overflow-y-auto flex flex-col">
-      <h1 className="text-3xl font-bold text-cyan-400">AI Notes</h1>
+    <aside className="w-64 shrink-0 bg-slate-950 border-r border-slate-800 text-white flex flex-col h-full">
 
-      <button
-        onClick={addNote}
-        className="w-full mt-5 bg-cyan-500 hover:bg-cyan-600 py-3 rounded-xl font-semibold transition text-white"
-      >
-        + New Note
-      </button>
+      {/* =========================
+          Header
+      ========================= */}
+      <div className="p-4 border-b border-slate-800">
 
-      {/* Active Notes */}
-      <div className="mt-6 space-y-3 flex-1 overflow-y-auto pr-1">
-        {sortedNotes.length === 0 ? (
-          <p className="text-slate-400 text-sm text-center mt-10">No notes found.</p>
-        ) : (
-          sortedNotes.map((note) => (
-            <div
-              key={note.id}
-              onClick={() => setSelectedNote(note)}
-              className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition ${
-                selectedNote?.id === note.id
-                  ? "bg-cyan-500 text-white shadow-md"
-                  : "bg-slate-700 hover:bg-slate-600 text-slate-200"
-              }`}
-            >
-              <div className="flex-1 overflow-hidden">
-                <div className="font-medium truncate text-sm">
-                  {note.pinned && "📌 "} {note.favorite && "⭐ "}
-                  {note.title || "Untitled Note"}
-                </div>
-                <div className="text-xs truncate mt-1 text-slate-400">
-                  {note.content ? stripHtml(note.content).slice(0, 35) + "..." : "Empty Note"}
-                </div>
-              </div>
+        <h2 className="text-xl font-bold text-cyan-400 mb-4">
+          📝 My Notes
+        </h2>
 
-              <div className="flex gap-2 ml-2">
-                <button onClick={(e) => { e.stopPropagation(); togglePin(note); }}>{note.pinned ? "📌" : "📍"}</button>
-                <button onClick={(e) => { e.stopPropagation(); toggleFavorite(note); }}>{note.favorite ? "⭐" : "☆"}</button>
-                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="text-red-400">🗑️</button>
-              </div>
+        {/* New Note */}
+        <button
+          onClick={handleNewNote}
+          className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/10"
+        >
+          <span className="text-lg">＋</span>
+          New Note
+        </button>
+
+      </div>
+
+      {/* =========================
+          Folders
+      ========================= */}
+      <div className="p-4 border-b border-slate-800">
+
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase">
+            Folders
+          </h3>
+
+          <span className="text-xs text-slate-600">
+            {selectedFolder === "Trash"
+              ? trashCount
+              : activeNotesCount}
+          </span>
+        </div>
+
+        <div className="space-y-1">
+
+          {folders.map((folder) => {
+
+            const folderCount =
+              folder === "All"
+                ? activeNotesCount
+                : notes.filter(
+                    (note) =>
+                      note.trash !== true &&
+                      note.folder === folder
+                  ).length;
+
+            return (
+              <button
+                key={folder}
+                onClick={() => {
+                  setSelectedFolder(folder);
+                  setSelectedTag("");
+                }}
+                className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                  selectedFolder === folder
+                    ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/20"
+                    : "text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+
+                <span>
+                  {folder === "All" && "📚 "}
+                  {folder === "Personal" && "👤 "}
+                  {folder === "Work" && "💼 "}
+                  {folder === "Study" && "📖 "}
+                  {folder === "Ideas" && "💡 "}
+                  {folder}
+                </span>
+
+                <span
+                  className={`text-xs ${
+                    selectedFolder === folder
+                      ? "text-cyan-400"
+                      : "text-slate-600"
+                  }`}
+                >
+                  {folderCount}
+                </span>
+
+              </button>
+            );
+          })}
+
+          {/* =========================
+              Trash
+          ========================= */}
+          <button
+            onClick={() => {
+              setSelectedFolder("Trash");
+              setSelectedTag("");
+            }}
+            className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg text-sm transition-all ${
+              selectedFolder === "Trash"
+                ? "bg-red-500/15 text-red-400 border border-red-500/20"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+          >
+            <span>🗑️ Trash</span>
+
+            {trashCount > 0 && (
+              <span
+                className={`text-xs ${
+                  selectedFolder === "Trash"
+                    ? "text-red-400"
+                    : "text-slate-600"
+                }`}
+              >
+                {trashCount}
+              </span>
+            )}
+          </button>
+
+        </div>
+      </div>
+
+      {/* =========================
+          Tags
+      ========================= */}
+      {allTags.length > 0 &&
+        selectedFolder !== "Trash" && (
+          <div className="p-4 border-b border-slate-800">
+
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase">
+                Tags
+              </h3>
+
+              {selectedTag && (
+                <button
+                  onClick={() => setSelectedTag("")}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-          ))
-        )}
-      </div>
 
-      <hr className="my-6 border-slate-600" />
-      
-      {/* Trash Section */}
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-bold text-red-400">🗑 Trash ({trashNotes.length})</h2>
-        {trashNotes.length > 0 && (
-          <button onClick={emptyTrash} className="text-xs bg-red-500/20 text-red-400 px-3 py-1 rounded">Empty</button>
-        )}
-      </div>
+            <div className="flex flex-wrap gap-2">
 
-      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-        {trashNotes.map((note) => (
-          <div key={note.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-3">
-            <div className="text-sm truncate text-slate-300">{note.title}</div>
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => restoreNote(note.id)} className="text-xs text-green-400">♻ Restore</button>
-              <button onClick={() => deleteForever(note.id)} className="text-xs text-red-400">❌ Delete</button>
+              {allTags.map((tag, index) => {
+
+                const tagKey = `${tag}-${index}`;
+
+                return (
+                  <button
+                    key={tagKey}
+                    onClick={() => {
+                      setSelectedTag(
+                        selectedTag === tag
+                          ? ""
+                          : tag
+                      );
+
+                      setSelectedFolder("All");
+                    }}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                      selectedTag === tag
+                        ? "bg-cyan-500 text-white border-cyan-500"
+                        : "bg-slate-800 text-slate-300 border-slate-700 hover:border-cyan-500 hover:text-cyan-400"
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                );
+              })}
+
             </div>
           </div>
-        ))}
+        )}
+
+      {/* =========================
+          Notes List
+      ========================= */}
+      <div className="flex-1 overflow-y-auto p-3">
+
+        {/* Notes Header */}
+        <div className="flex items-center justify-between px-1 mb-3">
+
+          <h3
+            className={`text-xs font-semibold uppercase ${
+              selectedFolder === "Trash"
+                ? "text-red-400"
+                : "text-slate-500"
+            }`}
+          >
+            {selectedFolder === "Trash"
+              ? "Trash"
+              : "Notes"}
+          </h3>
+
+          <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+            {filteredNotes.length}
+          </span>
+
+        </div>
+
+        {/* Empty */}
+        {filteredNotes.length === 0 ? (
+
+          <div className="text-center py-10 px-3">
+
+            <div className="text-4xl mb-3">
+              {selectedFolder === "Trash"
+                ? "🗑️"
+                : "📝"}
+            </div>
+
+            <p className="text-slate-400 text-sm">
+              {selectedFolder === "Trash"
+                ? "Trash is empty"
+                : "No notes found"}
+            </p>
+
+            {selectedFolder !== "Trash" && (
+              <button
+                onClick={handleNewNote}
+                className="mt-3 text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
+              >
+                + Create a note
+              </button>
+            )}
+
+          </div>
+
+        ) : (
+
+          <div className="space-y-2">
+
+            {filteredNotes.map((note) => {
+
+              const isSelected =
+                selectedNote?.id === note.id;
+
+              const isTrash =
+                note.trash === true;
+
+              return (
+                <div
+                  key={note.id}
+                  className={`w-full p-3 rounded-xl border transition-all ${
+                    isSelected
+                      ? "bg-cyan-500/10 border-cyan-500/50 shadow-sm shadow-cyan-500/5"
+                      : "bg-slate-900 border-slate-800 hover:border-slate-600"
+                  }`}
+                >
+
+                  {/* Note Selection */}
+                  <button
+                    onClick={() =>
+                      setSelectedNote(note)
+                    }
+                    className="w-full text-left"
+                  >
+
+                    {/* Note title + content */}
+                    <div className="min-w-0">
+
+                      <p
+                        className={`font-medium text-sm truncate ${
+                          isSelected
+                            ? "text-cyan-400"
+                            : "text-slate-200"
+                        }`}
+                      >
+                        {note.title ||
+                          "Untitled Note"}
+                      </p>
+
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                        {note.content
+                          ? note.content
+                              .replace(
+                                /<[^>]*>/g,
+                                ""
+                              )
+                              .replace(
+                                /&nbsp;/g,
+                                " "
+                              )
+                              .trim()
+                          : "Empty note"}
+                      </p>
+
+                    </div>
+
+                    {/* Folder */}
+                    {!isTrash &&
+                      note.folder && (
+                        <div className="mt-2">
+
+                          <span className="text-[10px] text-slate-500">
+                            📁 {note.folder}
+                          </span>
+
+                        </div>
+                      )}
+
+                    {/* Tags */}
+                    {!isTrash &&
+                      Array.isArray(note.tags) &&
+                      note.tags.length > 0 && (
+
+                        <div className="flex flex-wrap gap-1 mt-2">
+
+                          {note.tags
+                            .slice(0, 3)
+                            .map((tag, index) => (
+
+                              <span
+                                key={`${note.id}-tag-${tag}-${index}`}
+                                className="text-[10px] bg-cyan-500/5 text-cyan-500/70 border border-cyan-500/10 px-1.5 py-0.5 rounded"
+                              >
+                                #{tag}
+                              </span>
+
+                            ))}
+
+                          {note.tags.length > 3 && (
+                            <span className="text-[10px] text-slate-600">
+                              +{note.tags.length - 3}
+                            </span>
+                          )}
+
+                        </div>
+                      )}
+
+                  </button>
+
+                  {/* =========================
+                      Actions
+                  ========================= */}
+                  <div className="flex gap-2 mt-3">
+
+                    {isTrash ? (
+                      <>
+                        {/* Restore */}
+                        <button
+                          onClick={(e) =>
+                            handleRestore(e, note)
+                          }
+                          className="flex-1 text-xs py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                        >
+                          ♻️ Restore
+                        </button>
+
+                        {/* Permanent Delete */}
+                        <button
+                          onClick={(e) =>
+                            handlePermanentDelete(e, note)
+                          }
+                          className="flex-1 text-xs py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                        >
+                          ❌ Delete
+                        </button>
+                      </>
+                    ) : (
+                      /* Move To Trash */
+                      <button
+                        onClick={(e) =>
+                          handleMoveToTrash(e, note)
+                        }
+                        className="w-full text-xs py-1.5 rounded-lg bg-slate-800 text-slate-400 border border-slate-700 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-colors"
+                      >
+                        🗑️ Move to Trash
+                      </button>
+                    )}
+
+                  </div>
+
+                </div>
+              );
+            })}
+
+          </div>
+        )}
+
       </div>
+
     </aside>
   );
 }

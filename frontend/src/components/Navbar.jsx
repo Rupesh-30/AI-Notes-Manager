@@ -10,6 +10,7 @@ function Navbar({
   theme,
   setTheme,
   setShowSettings,
+  setShowProfile,
   saveStatus,
 }) {
   return (
@@ -59,7 +60,15 @@ function Navbar({
             📄 Export PDF
           </button>
 
-          {/* Settings Button */}
+          {/* 👤 Profile Button */}
+          <button
+            onClick={() => setShowProfile(true)}
+            className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+          >
+            👤 Profile
+          </button>
+
+          {/* ⚙️ Settings Button */}
           <button
             onClick={() => setShowSettings(true)}
             className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-white transition-colors flex items-center gap-2"

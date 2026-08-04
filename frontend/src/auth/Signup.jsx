@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/config"; // ⭐ Combined Import
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../firebase/config";
 import toast from "react-hot-toast";
 
 function Signup() {
@@ -12,7 +12,9 @@ function Signup() {
   const handleSignup = async (e) => {
     e.preventDefault();
 
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -20,14 +22,14 @@ function Signup() {
     setLoading(true);
 
     try {
-      // 1. Auth Account Creation
+      // 1. Create Firebase Authentication account
       const result = await createUserWithEmailAndPassword(
         auth,
-        email.trim(),
+        cleanEmail,
         password
       );
 
-      // 2. Create Initial Firestore User Document
+      // 2. Create initial Firestore user document
       await setDoc(doc(db, "users", result.user.uid), {
         email: result.user.email,
         usage: {
@@ -39,13 +41,33 @@ function Signup() {
           rewrite: 0,
           askAI: 0,
         },
-        createdAt: new Date(),
+        createdAt: serverTimestamp(),
       });
 
       toast.success("Account created successfully!");
     } catch (error) {
       console.error("Signup Error:", error);
-      toast.error(error.message || "Failed to create account");
+
+      switch (error.code) {
+        case "auth/email-already-in-use":
+          toast.error("This email is already registered. Please login.");
+          break;
+
+        case "auth/invalid-email":
+          toast.error("Please enter a valid email address.");
+          break;
+
+        case "auth/weak-password":
+          toast.error("Password is too weak. Please use a stronger password.");
+          break;
+
+        case "auth/network-request-failed":
+          toast.error("Network error. Please check your internet connection.");
+          break;
+
+        default:
+          toast.error("Failed to create account. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -81,3 +103,4 @@ function Signup() {
 }
 
 export default Signup;
+

@@ -58,3 +58,40 @@ body{
 .dark .ql-fill {
   fill: white !important;
 }
+/* ==========================================
+   Global Display Size
+   ========================================== */
+
+.app-display-small {
+  font-size: 14px;
+}
+
+.app-display-medium {
+  font-size: 16px;
+}
+
+.app-display-large {
+  font-size: 18px;
+}
+
+/* Smooth UI text scaling */
+.app-display-small button,
+.app-display-small input,
+.app-display-small textarea,
+.app-display-small select {
+  font-size: 0.9em;
+}
+
+.app-display-medium button,
+.app-display-medium input,
+.app-display-medium textarea,
+.app-display-medium select {
+  font-size: 1em;
+}
+
+.app-display-large button,
+.app-display-large input,
+.app-display-large textarea,
+.app-display-large select {
+  font-size: 1.1em;
+}

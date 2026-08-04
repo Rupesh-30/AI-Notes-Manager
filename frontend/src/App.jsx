@@ -6,7 +6,7 @@ import Navbar from "./components/Navbar";
 import Editor from "./components/Editor";
 import AIPanel from "./components/AIPanel";
 import Settings from "./components/Settings";
-
+import Profile from "./components/Profile";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "./firebase/config";
 
@@ -60,7 +60,15 @@ function App() {
   // Firestore Realtime Listener
   // ==========================
   useEffect(() => {
-    if (!user) return;
+    // Logged out হলে সব local note state clear করে দাও
+    if (!user) {
+      setNotes([]);
+      setSelectedNoteId(null);
+      setTempSelectedNote(null);
+      return;
+    }
+
+    let active = true;
 
     const q = query(
       collection(db, "notes"),
@@ -68,31 +76,55 @@ function App() {
       orderBy("createdAt", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const firebaseNotes = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!active) return;
 
-      setNotes(firebaseNotes);
+        const firebaseNotes = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-      if (firebaseNotes.length === 0) {
-        setSelectedNoteId(null);
-        setTempSelectedNote(null);
-        return;
+        setNotes(firebaseNotes);
+
+        if (firebaseNotes.length === 0) {
+          setSelectedNoteId(null);
+          setTempSelectedNote(null);
+          return;
+        }
+
+        setSelectedNoteId((prev) => {
+          const exists = firebaseNotes.some(
+            (note) => note.id === prev
+          );
+
+          if (exists) return prev;
+
+          setTempSelectedNote(null);
+          return firebaseNotes[0].id;
+        });
+      },
+      (error) => {
+        // Logout/auth change-এর সময় পুরনো listener error হলে
+        // সেটাকে app crash বা noisy error হতে দেব না
+        if (!active) return;
+
+        console.error("Notes listener error:", error);
+
+        if (error.code === "permission-denied") {
+          setNotes([]);
+          setSelectedNoteId(null);
+          setTempSelectedNote(null);
+        }
       }
+    );
 
-      // Keep current selected note or fallback to first
-      setSelectedNoteId((prev) => {
-        const exists = firebaseNotes.find((n) => n.id === prev);
-        setTempSelectedNote(null);
-
-        if (exists) return prev;
-        return firebaseNotes[0].id;
-      });
-    });
-
-    return unsubscribe;
+    // User change / logout হলে পুরনো listener বন্ধ হবে
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [user]);
 
   // ==========================
@@ -115,9 +147,21 @@ function App() {
   }, [theme]);
 
   // ==========================
-  // Settings & Save Status
+  // Display Size State (NEW)
+  // ==========================
+  const [displaySize, setDisplaySize] = useState(
+    () => localStorage.getItem("displaySize") || "medium"
+  );
+
+  useEffect(() => {
+    localStorage.setItem("displaySize", displaySize);
+  }, [displaySize]);
+
+  // ==========================
+  // Settings & Profile State
   // ==========================
   const [showSettings, setShowSettings] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [saveStatus] = useState("✅ Saved");
 
   // ==========================
@@ -135,12 +179,12 @@ function App() {
   }
 
   // ==========================
-  // Modern Auth Page (With Enhanced Motion & Breathing Glows)
+  // Modern Auth Page
   // ==========================
   if (!user) {
     return (
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-950 text-white p-4">
-        {/* ⭐ Smooth Breathing Glows */}
+        {/* Smooth Breathing Glows */}
         <motion.div
           animate={{
             scale: [1, 1.2, 1],
@@ -163,12 +207,12 @@ function App() {
             duration: 4,
             repeat: Infinity,
             ease: "easeInOut",
-            delay: 2, // Alternating breathe effect
+            delay: 2,
           }}
           className="absolute w-96 h-96 bg-purple-500/20 rounded-full blur-3xl bottom-0 right-0"
         />
 
-        {/* ⭐ Hover Lifting Auth Glass Card */}
+        {/* Auth Glass Card */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -200,7 +244,7 @@ function App() {
             </p>
           </div>
 
-          {/* Slide Animated Form Switcher */}
+          {/* Form Switcher */}
           <AnimatePresence mode="wait">
             {showSignup ? (
               <motion.div
@@ -225,7 +269,7 @@ function App() {
             )}
           </AnimatePresence>
 
-          {/* ⭐ Premium Interactive Motion Button */}
+          {/* Switch Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -244,13 +288,12 @@ function App() {
   // ==========================
   return (
     <div
-      className={`flex h-screen overflow-hidden ${
+      className={`app-display-${displaySize} flex h-screen overflow-hidden ${
         theme === "dark" ? "bg-slate-900 text-white" : "bg-gray-100 text-black"
       }`}
     >
       <Sidebar
         notes={notes}
-        setNotes={setNotes}
         selectedNote={selectedNote}
         setSelectedNote={handleSelectNote}
         searchTerm={searchTerm}
@@ -268,6 +311,7 @@ function App() {
           theme={theme}
           setTheme={setTheme}
           setShowSettings={setShowSettings}
+          setShowProfile={setShowProfile}
           saveStatus={saveStatus}
           onLogout={() => signOut(auth)}
         />
@@ -290,6 +334,14 @@ function App() {
         setShow={setShowSettings}
         theme={theme}
         setTheme={setTheme}
+        displaySize={displaySize}
+        setDisplaySize={setDisplaySize}
+      />
+
+      <Profile
+        show={showProfile}
+        setShow={setShowProfile}
+        notes={notes}
       />
     </div>
   );
