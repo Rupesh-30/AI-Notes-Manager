@@ -23,7 +23,7 @@ export async function askBackendAI(prompt, action = "askAI") {
     // ==========================================
 
     const response = await fetch(
-      "http://localhost:5000/api/ai",
+      "https://ai-notes-manager-8eu7.onrender.com/api/ai",
       {
         method: "POST",
 
