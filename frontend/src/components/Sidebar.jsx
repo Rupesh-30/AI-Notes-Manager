@@ -13,6 +13,8 @@ function Sidebar({
   notes = [],
   selectedNote,
   setSelectedNote,
+  mobileView = "sidebar",
+  setMobileView,
   searchTerm = "",
   selectedFolder = "All",
   setSelectedFolder,
@@ -227,7 +229,13 @@ function Sidebar({
   ).length;
 
   return (
-    <aside className="w-64 shrink-0 bg-slate-950 border-r border-slate-800 text-white flex flex-col h-full">
+    <aside
+  className={`w-full lg:w-64 shrink-0 bg-slate-950 border-r border-slate-800 text-white flex flex-col h-full ${
+    mobileView === "sidebar"
+      ? "flex"
+      : "hidden lg:flex"
+  }`}
+>
 
       {/* =========================
           Header
@@ -481,9 +489,10 @@ function Sidebar({
 
                   {/* Note Selection */}
                   <button
-                    onClick={() =>
+                    onClick={() => {
                       setSelectedNote(note)
-                    }
+                      setMobileView("editor");
+                    }}
                     className="w-full text-left"
                   >
 

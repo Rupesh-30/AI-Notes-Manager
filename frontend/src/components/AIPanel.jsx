@@ -337,7 +337,7 @@ function AIPanel({ selectedNote }) {
   // Render UI
   // ==========================================
   return (
-    <aside className="w-full lg:w-80 bg-slate-800/90 backdrop-blur-xl border-l border-slate-700 p-5 flex flex-col h-full overflow-y-auto select-none">
+    <aside className="w-full lg:w-80 lg:border-l border-t lg:border-t-0 border-slate-700 bg-slate-800/90 backdrop-blur-xl p-4 lg:p-5 flex flex-col h-full overflow-y-auto select-none">
       {/* Title */}
       <h2 className="text-2xl font-bold text-cyan-400 mb-5 flex items-center gap-2 shrink-0">
         <span>🤖</span>

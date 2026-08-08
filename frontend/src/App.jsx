@@ -30,6 +30,7 @@ function App() {
 
   // Auth Switcher State
   const [showSignup, setShowSignup] = useState(false);
+  const [showMobileAI, setShowMobileAI] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -46,15 +47,20 @@ function App() {
   const [notes, setNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [tempSelectedNote, setTempSelectedNote] = useState(null);
+  const [mobileView, setMobileView] = useState("sidebar");
 
   const selectedNote =
     notes.find((note) => note.id === selectedNoteId) || tempSelectedNote;
 
   // Helper function to handle note selection
   const handleSelectNote = (note) => {
-    setSelectedNoteId(note?.id || null);
-    setTempSelectedNote(note || null);
-  };
+  setSelectedNoteId(note?.id || null);
+  setTempSelectedNote(note || null);
+
+  if (note) {
+    setMobileView("editor");
+  }
+};
 
   // ==========================
   // Firestore Realtime Listener
@@ -286,65 +292,157 @@ function App() {
   // ==========================
   // Main Application Dashboard
   // ==========================
-  return (
+ 
+return (
+  <div
+    className={`app-display-${displaySize} flex flex-col lg:flex-row h-screen overflow-hidden ${
+      theme === "dark"
+        ? "bg-slate-900 text-white"
+        : "bg-gray-100 text-black"
+    }`}
+  >
+    {/* =========================
+        Sidebar
+    ========================= */}
     <div
-      className={`app-display-${displaySize} flex h-screen overflow-hidden ${
-        theme === "dark" ? "bg-slate-900 text-white" : "bg-gray-100 text-black"
-      }`}
+      className={`${
+        mobileView === "sidebar"
+          ? "flex"
+          : "hidden"
+      } lg:flex h-full w-full lg:w-auto`}
     >
       <Sidebar
         notes={notes}
         selectedNote={selectedNote}
         setSelectedNote={handleSelectNote}
+        mobileView={mobileView}
+        setMobileView={setMobileView}
         searchTerm={searchTerm}
         selectedFolder={selectedFolder}
         setSelectedFolder={setSelectedFolder}
         selectedTag={selectedTag}
         setSelectedTag={setSelectedTag}
       />
+    </div>
 
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          selectedNote={selectedNote}
-          theme={theme}
-          setTheme={setTheme}
-          setShowSettings={setShowSettings}
-          setShowProfile={setShowProfile}
-          saveStatus={saveStatus}
-          onLogout={() => signOut(auth)}
-        />
-
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
-          <Editor
-            key={selectedNote?.id}
-            notes={notes}
-            setNotes={setNotes}
-            selectedNote={selectedNote}
-            setSelectedNote={handleSelectNote}
-          />
-
-          <AIPanel selectedNote={selectedNote} />
-        </div>
-      </div>
-
-      <Settings
-        show={showSettings}
-        setShow={setShowSettings}
+    {/* =========================
+        Editor + AI Area
+    ========================= */}
+    <div
+      className={`${
+        mobileView === "editor"
+          ? "flex"
+          : "hidden"
+      } lg:flex flex-col flex-1 min-w-0 h-full overflow-hidden`}
+    >
+      <Navbar
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        selectedNote={selectedNote}
         theme={theme}
         setTheme={setTheme}
-        displaySize={displaySize}
-        setDisplaySize={setDisplaySize}
+        setShowSettings={setShowSettings}
+        setShowProfile={setShowProfile}
+        saveStatus={saveStatus}
+        onLogout={() => signOut(auth)}
       />
 
-      <Profile
-        show={showProfile}
-        setShow={setShowProfile}
-        notes={notes}
-      />
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+        <Editor
+          key={selectedNote?.id}
+          notes={notes}
+          setNotes={setNotes}
+          selectedNote={selectedNote}
+          setSelectedNote={handleSelectNote}
+          
+          setMobileView={setMobileView}
+        />
+        {/* Mobile AI Button */}
+<button
+  onClick={() => setShowMobileAI(true)}
+  className="lg:hidden fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-cyan-500 active:scale-95"
+>
+  🤖 Ask AI
+</button>
+
+        <div className="hidden lg:flex lg:w-80 shrink-0">
+  <AIPanel selectedNote={selectedNote} />
+</div>
+      </div>
     </div>
-  );
+
+   
+    {/* =========================
+        Settings
+    ========================= */}
+    <Settings
+      show={showSettings}
+      setShow={setShowSettings}
+      theme={theme}
+      setTheme={setTheme}
+      displaySize={displaySize}
+      setDisplaySize={setDisplaySize}
+    />
+
+    {/* =========================
+        Profile
+    ========================= */}
+    <Profile
+      show={showProfile}
+      setShow={setShowProfile}
+      notes={notes}
+    />
+
+    {/* =========================
+        Mobile AI Panel
+    ========================= */}
+    <AnimatePresence>
+      {showMobileAI && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-black/60 lg:hidden"
+          onClick={() => setShowMobileAI(false)}
+        >
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25 }}
+            className={`absolute bottom-0 left-0 right-0 h-[90vh] overflow-hidden rounded-t-2xl ${
+              theme === "dark"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-black"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile AI Header */}
+            <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
+              <h2 className="font-semibold">
+                🤖 AI Assistant
+              </h2>
+
+              <button
+                onClick={() => setShowMobileAI(false)}
+                className="rounded-lg px-3 py-1 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                aria-label="Close AI Assistant"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* AI Panel */}
+            <div className="h-[calc(90vh-57px)] overflow-y-auto">
+              <AIPanel selectedNote={selectedNote} />
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 }
 
 export default App;
+

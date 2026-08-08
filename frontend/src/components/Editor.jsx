@@ -32,6 +32,7 @@ function Editor({
   setNotes,
   selectedNote,
   setSelectedNote,
+  setMobileView,
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -199,6 +200,14 @@ function Editor({
     <div className="flex-1 bg-slate-900 p-4 md:p-6 overflow-hidden">
 
       <div className="h-full flex flex-col">
+
+        {/* Mobile Back to Notes */}
+<button
+  onClick={() => setMobileView("sidebar")}
+  className="lg:hidden mb-3 flex items-center gap-2 text-sm text-slate-400 hover:text-cyan-400 transition-colors"
+>
+  ← Back to Notes
+</button>
 
         {/* ================================= */}
         {/* NOTE HEADER */}
